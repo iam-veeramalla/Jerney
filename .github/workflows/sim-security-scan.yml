@@ -1,0 +1,42 @@
+# .github/workflows/sim-security-scan.yml
+# Place this file in your repo at: .github/workflows/sim-security-scan.yml
+
+name: AI Security Scanner
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Sim.ai Security Scan
+        run: |
+          curl -s -X POST \
+            "https://sim.ai/api/workflows/45d62250-3c46-430d-8cf8-ba658804b20f/execute" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${{ secrets.SIM_API_KEY }}" \
+            -d '{
+              "action": "${{ github.event.action }}",
+              "number": ${{ github.event.pull_request.number }},
+              "pull_request": {
+                "title": ${{ toJSON(github.event.pull_request.title) }},
+                "body": ${{ toJSON(github.event.pull_request.body) }},
+                "user": { "login": "${{ github.event.pull_request.user.login }}" },
+                "head": { "sha": "${{ github.event.pull_request.head.sha }}" },
+                "html_url": "${{ github.event.pull_request.html_url }}",
+                "state": "${{ github.event.pull_request.state }}",
+                "additions": ${{ github.event.pull_request.additions }},
+                "deletions": ${{ github.event.pull_request.deletions }},
+                "changed_files": ${{ github.event.pull_request.changed_files }}
+              },
+              "repository": {
+                "full_name": "${{ github.repository }}",
+                "name": "${{ github.event.repository.name }}",
+                "owner": { "login": "${{ github.repository_owner }}" },
+                "private": ${{ github.event.repository.private }}
+              },
+              "sender": { "login": "${{ github.actor }}" }
+            }'
+          echo "Security scan triggered successfully"
