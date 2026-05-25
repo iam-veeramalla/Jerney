@@ -1,0 +1,95 @@
+---
+# Secret stores your Gemini API key securely in Kubernetes
+# Never put real API keys in plain files you commit to Git
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubehealer-secret
+  namespace: jerney
+type: Opaque
+stringData:
+  GEMINI_API_KEY: "AIzaSyBLcd2Hl7pFc0vKARTjSyEfUPZuZzSmAEs"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubehealer
+  namespace: jerney
+  labels:
+    app.kubernetes.io/name: kubehealer
+    app.kubernetes.io/part-of: jerney
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubehealer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubehealer
+        app.kubernetes.io/part-of: jerney
+    spec:
+      serviceAccountName: kubehealer   # uses the identity we created in rbac.yaml
+      containers:
+        - name: kubehealer
+          image: shikeb1/kubehealer:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kubehealer-secret
+                  key: GEMINI_API_KEY
+            - name: NAMESPACE
+              value: "jerney"
+            - name: AUTO_HEAL
+              value: "false"      # keep false until you trust the dry-run output
+            - name: POLL_INTERVAL
+              value: "30"
+            - name: MAX_RESTART_COUNT
+              value: "5"
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 300m, memory: 256Mi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+---
+# Service lets you access the dashboard via kubectl port-forward
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubehealer
+  namespace: jerney
+  labels:
+    app.kubernetes.io/name: kubehealer
+    app.kubernetes.io/part-of: jerney
+spec:
+  selector:
+    app.kubernetes.io/name: kubehealer
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+
+---
+# NetworkPolicy allows KubeHealer to make outbound calls
+# It needs to reach: Kubernetes API server + generativelanguage.googleapis.com
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubehealer-egress
+  namespace: jerney
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kubehealer
+  policyTypes:
+    - Egress
+  egress:
+    - {}   # allow all outbound traffic from KubeHealer

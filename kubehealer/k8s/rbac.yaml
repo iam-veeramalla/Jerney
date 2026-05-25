@@ -1,0 +1,40 @@
+# ServiceAccount = the identity KubeHealer runs as inside the cluster
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubehealer
+  namespace: jerney
+
+---
+# ClusterRole = defines what permissions this identity has
+# We need: read pods + their logs, delete pods (to restart them),
+#          and patch deployments (to fix resources/env/replicas)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubehealer-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding = connects the ServiceAccount to the ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubehealer-binding
+subjects:
+  - kind: ServiceAccount
+    name: kubehealer
+    namespace: jerney
+roleRef:
+  kind: ClusterRole
+  name: kubehealer-role
+  apiGroup: rbac.authorization.k8s.io
